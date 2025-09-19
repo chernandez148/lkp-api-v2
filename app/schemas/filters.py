@@ -54,6 +54,10 @@ class ProductFilters(BaseModel):
         description="Limit result set to products with a specific slug",
         example="premium-ebook"
     )
+    tag: Optional[str] = Field(
+        None,
+        description="Limits result set to products with specific tag"
+    )
 
     def dict(self, **kwargs):
         # Remove None values to clean up the query params

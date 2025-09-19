@@ -35,6 +35,7 @@ class WooCommerceAPI:
                 )
     
     async def get_products(self, params: Optional[Dict] = None) -> List[Dict]:
+        print(params)
         return await self._request("GET", "products", params=params)
     
     async def get_product(self, slug: str) -> Dict:
