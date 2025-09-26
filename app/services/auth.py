@@ -11,6 +11,7 @@ class AuthService:
     def __init__(self):
         self.jwt_endpoint = f"{settings.WP_URL}/wp-json/jwt-auth/v1/token"
         self.user_endpoint = f"{settings.WP_URL}/wp-json/wp/v2/users/me"
+        self.lost_password_endpoint = f"{settings.WP_URL}/wp-json/custom/v1/forgot-password"
         self.timeout = 10.0
 
     async def authenticate_user(self, username: str, password: str):
@@ -67,5 +68,138 @@ class AuthService:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Authentication service unavailable"
             )
+
+    async def register_user(
+        self,
+        username: str,
+        email: str,
+        password: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        website: Optional[str] = None,
+        role: str = "customer"
+    ):
+        allowed_roles = [
+            "vendor",
+            "shop_manager",
+            "customer",
+            "subscriber",
+            "contributor",
+            "author",
+            "editor",
+        ]
+
+        # validate role
+        role = role.lower()
+        if role not in allowed_roles:
+            logger.warning(f"Attempt to register user with invalid role: {role}")
+            return {
+                "success": False,
+                "message": f"Role '{role}' is not allowed. Allowed roles: {allowed_roles}",
+                "data": None
+            }
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                payload = {
+                    "username": username,
+                    "email": email,
+                    "password": password,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "url": website,
+                    "roles": [role],  # WordPress expects list
+                }
+
+                # remove None values
+                payload = {k: v for k, v in payload.items() if v is not None}
+
+                response = await client.post(
+                    f"{settings.WP_URL}/wp-json/wp/v2/users",
+                    json=payload,
+                    auth=(settings.WP_ADMIN_USER, settings.WP_ADMIN_PASS)
+                )
+
+                if response.status_code != 201:
+                    error_msg = response.json().get("message", "User registration failed")
+                    logger.error(f"Failed to register user {username}: {error_msg}")
+                    return {
+                        "success": False,
+                        "message": error_msg,
+                        "data": None
+                    }
+
+                user_data = response.json()
+                logger.info(f"Successfully registered user {username}")
+                return {
+                    "success": True,
+                    "message": "User registered successfully",
+                    "data": user_data
+                }
+
+        except httpx.TimeoutException:
+            logger.error("User registration timeout")
+            return {
+                "success": False,
+                "message": "User registration service timeout",
+                "data": None
+            }
+        except httpx.RequestError as e:
+            logger.error(f"WordPress connection error: {str(e)}")
+            return {
+                "success": False,
+                "message": "User registration service unavailable",
+                "data": None
+            }
+
+
+    async def forgot_password(self, email: str):
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    self.lost_password_endpoint,
+                    json={"email": email},
+                    auth=(settings.WP_ADMIN_USER, settings.WP_ADMIN_PASS)
+                )
+
+                print('response', response.json())
+
+                if response.status_code == 404:
+                    logger.error(f"Password reset endpoint not found: {self.lost_password_endpoint}")
+                    return {
+                        "success": False,
+                        "message": "Password reset endpoint not available. Check WordPress configuration.",
+                        "data": None
+                    }
+                if response.status_code != 200:
+                    error_msg = response.json().get("message", "Password reset request failed")
+                    logger.warning(f"Failed password reset for {email}: {error_msg}")
+                    return {
+                        "success": False,
+                        "message": error_msg,
+                        "data": None
+                    }
+
+                logger.info(f"Password reset initiated for {email}")
+                return {
+                    "success": True,
+                    "message": "Password reset email sent successfully",
+                    "data": None
+                }
+
+        except httpx.TimeoutException:
+            logger.error("Password reset timeout")
+            return {
+                "success": False,
+                "message": "Password reset service timeout",
+                "data": None
+            }
+        except httpx.RequestError as e:
+            logger.error(f"WordPress connection error during password reset: {str(e)}")
+            return {
+                "success": False,
+                "message": "Password reset service unavailable",
+                "data": None
+            }
 
 auth_service = AuthService()
