@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     WP_URL: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    WP_ADMIN_USER: str
+    WP_ADMIN_PASS: str
+    REDIRECT_URL: str
 
     # Stripe Settings
     STRIPE_SECRET_KEY: str
