@@ -55,3 +55,8 @@ class UserRegister(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: str
+
+class ResetPasswordRequest(BaseModel):
+    login: str
+    key: str
+    new_password: str

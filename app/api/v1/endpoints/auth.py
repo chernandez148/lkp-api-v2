@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from app.services.auth import auth_service
 from app.schemas.token import Token
-from app.schemas.user import UserRegister, ForgotPasswordRequest
+from app.schemas.user import UserRegister, ForgotPasswordRequest, ResetPasswordRequest
 from app.api.deps import oauth2_scheme, get_current_user
 
 router = APIRouter(tags=["auth"])
@@ -28,6 +28,15 @@ async def register(user: UserRegister):
 @router.post("/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):
     return await auth_service.forgot_password(request.email)
+
+
+@router.post("/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    return await auth_service.reset_password(
+        key=request.key,
+        login=request.login,
+        new_password=request.new_password
+    )
 
 @router.get("/me")
 async def read_users_me(current_user: dict = Depends(get_current_user)):

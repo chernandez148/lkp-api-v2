@@ -155,14 +155,17 @@ class AuthService:
 
     async def forgot_password(self, email: str):
         try:
+            payload = {
+                "email": email,
+                "redirect_url": settings.REDIRECT_URL
+            }
+
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
                     self.lost_password_endpoint,
-                    json={"email": email},
+                    json=payload,
                     auth=(settings.WP_ADMIN_USER, settings.WP_ADMIN_PASS)
                 )
-
-                print('response', response.json())
 
                 if response.status_code == 404:
                     logger.error(f"Password reset endpoint not found: {self.lost_password_endpoint}")
@@ -201,5 +204,65 @@ class AuthService:
                 "message": "Password reset service unavailable",
                 "data": None
             }
+
+
+    async def reset_password(self, key: str, login: str, new_password: str):
+        reset_password_endpoint = f"{settings.WP_URL}/wp-json/custom/v1/reset-password"
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                payload = {
+                    "key": key,
+                    "login": login,
+                    "password": new_password
+                }
+
+                response = await client.post(
+                    reset_password_endpoint,
+                    json=payload,
+                    auth=(settings.WP_ADMIN_USER, settings.WP_ADMIN_PASS)
+                )
+
+                print("reset response", response.json())
+
+                if response.status_code == 404:
+                    logger.error(f"Reset password endpoint not found: {reset_password_endpoint}")
+                    return {
+                        "success": False,
+                        "message": "Reset password endpoint not available. Check WordPress configuration.",
+                        "data": None
+                    }
+
+                if response.status_code != 200:
+                    error_msg = response.json().get("message", "Password reset failed")
+                    logger.warning(f"Failed reset password for {login}: {error_msg}")
+                    return {
+                        "success": False,
+                        "message": error_msg,
+                        "data": None
+                    }
+
+                logger.info(f"Password successfully reset for {login}")
+                return {
+                    "success": True,
+                    "message": "Password has been reset successfully",
+                    "data": response.json()
+                }
+
+        except httpx.TimeoutException:
+            logger.error("Reset password timeout")
+            return {
+                "success": False,
+                "message": "Reset password service timeout",
+                "data": None
+            }
+        except httpx.RequestError as e:
+            logger.error(f"WordPress connection error during reset password: {str(e)}")
+            return {
+                "success": False,
+                "message": "Reset password service unavailable",
+                "data": None
+            }
+
 
 auth_service = AuthService()
