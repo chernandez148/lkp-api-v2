@@ -1,4 +1,5 @@
 # app/services/products.py
+import httpx
 from typing import List, Dict, Optional, Set
 from app.utils.wc_api import wc_api
 from app.services.permissions import has_purchased, is_admin
@@ -6,6 +7,8 @@ from app.utils.cache import get_cached, set_cached
 import asyncio
 import re
 import logging  # ← Add this
+from app.services.favorites import favorite_service
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)  # ← Add this
 
@@ -128,14 +131,46 @@ async def get_products_for_user_library(user_id: Optional[int], filters: Dict) -
 # -----------------------------
 # Single product
 # -----------------------------
-async def get_product_by_slug(slug: str, user_id: Optional[int]) -> Dict:
+async def get_product_by_slug(slug: str, user_id: Optional[int], token: Optional[str] = None) -> Dict:
     product = await wc_api.get_product(slug)
     enriched = await enrich_product_categories(product)
     sanitized_list = await sanitize_products_bulk([enriched], user_id)
-    return sanitized_list[0]
+    product_data = sanitized_list[0]
+
+    # If token is provided, check favorites
+    if token:
+        favorites_result = await favorite_service.get_favorites(token)
+        if favorites_result.get("success") and isinstance(favorites_result.get("data"), list):
+            product_data["favorite"] = product_data.get("id") in favorites_result["data"]
+        else:
+            product_data["favorite"] = False
+
+    return product_data
 
 # -----------------------------
 # Featured products
 # -----------------------------
 async def get_all_featured_products(filters: Dict) -> List[Dict]:
     return await wc_api.get_products(params=filters)
+
+
+# -----------------------------
+# Favorite products
+# -----------------------------
+async def get_favorite_products_for_user(token: str):
+    result = await favorite_service.get_favorites(token)
+    if not result["success"]:
+        return []
+
+    product_ids = result["data"]  # e.g., [226, 305, 412]
+    if not product_ids:
+        return []
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"{settings.WP_URL}/wp-json/wc/v3/products",
+            params={"include": ",".join(map(str, product_ids))},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        resp.raise_for_status()
+        return resp.json()
