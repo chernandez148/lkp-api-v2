@@ -1,8 +1,8 @@
 # app/api/v1/endpoints/orders.py
 from fastapi import APIRouter, Depends
-from typing import List, Optional
+from typing import Optional
 from app.services.orders import create_user_order, list_user_orders
-from app.schemas.order import OrderCreate, OrderResponse, OrderListResponse
+from app.schemas.order import OrderCreate, OrderResponse, PaginatedOrderResponse
 from app.api.deps import get_current_user
 from app.schemas.token import TokenData  # or your user schema
 
@@ -15,10 +15,10 @@ async def create_order(
 ):
     return await create_user_order(order_data, current_user)
 
-@router.get("/", response_model=List[OrderListResponse])
+@router.get("/", response_model=PaginatedOrderResponse)
 async def list_orders(
     current_user: TokenData = Depends(get_current_user),
-    page: Optional[int] = 1, 
-    per_page: Optional[int] = 10, 
+    page: Optional[int] = 1,
+    per_page: Optional[int] = 10,
 ):
     return await list_user_orders(current_user, page, per_page)

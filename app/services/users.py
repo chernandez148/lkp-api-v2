@@ -37,6 +37,12 @@ class UserService:
                 if profile_data.email:
                     payload["email"] = profile_data.email
 
+                if profile_data.website:
+                    payload["url"] = profile_data.website
+
+                if profile_data.role:
+                    payload["roles"] = [profile_data.role]
+
                 if not payload:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -72,6 +78,7 @@ class UserService:
                         "display_name": updated_user.get("name"),
                         "first_name": updated_user.get("first_name"),
                         "last_name": updated_user.get("last_name"),
+                        "website": updated_user.get("url"),
                         "role": updated_user.get("role"),
                         "roles": updated_user.get("roles"),
                         "is_admin": updated_user.get("is_super_admin"),
