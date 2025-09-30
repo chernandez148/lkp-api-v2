@@ -60,3 +60,12 @@ class ResetPasswordRequest(BaseModel):
     login: str
     key: str
     new_password: str
+
+class UserProfileUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
