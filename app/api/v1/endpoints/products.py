@@ -7,8 +7,10 @@ from app.services.products import (
     get_product_by_slug,
     get_all_product_authors,
     get_all_product_genres,
-    get_all_featured_products
+    get_all_featured_products,
+    get_favorite_products_for_user
 )
+from app.api.deps import oauth2_scheme, get_optional_token
 from app.schemas.filters import ProductFilters
 from app.utils.cache import get_cached, set_cached
 import json
@@ -18,7 +20,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 CACHE_TTL_PRODUCTS = 120
-CACHE_TTL_SINGLE_PRODUCT = 300
 CACHE_TTL_GENRES = 300
 CACHE_TTL_AUTHORS = 300
 CACHE_TTL_FEATURED = 600
@@ -33,6 +34,10 @@ def make_cache_key(prefix: str, user_id: Optional[int] = None, filters: dict = N
     if user_id:
         key_parts.append(str(user_id))
     return ":".join(key_parts)
+
+def make_cache_key_with_token(base: str, user_id: Optional[int], slug: str, token: Optional[str]) -> str:
+    token_part = f":{hash(token)}" if token else ""
+    return make_cache_key(base, user_id, slug=slug) + token_part
 
 @router.get("/")
 async def list_products(filters: ProductFilters = Depends(), user_id: Optional[int] = Query(None)):
@@ -88,12 +93,17 @@ async def list_product_authors(search: Optional[str] = Query(None)):
     await set_cached(cache_key, result, ttl=CACHE_TTL_AUTHORS)
     return result
 
+@router.get("/favorites")
+async def list_favorite_products(token: str = Depends(oauth2_scheme)):
+    products = await get_favorite_products_for_user(token)
+    print('products', products)
+    return products
+
 @router.get("/{slug}")
-async def get_product(slug: str, user_id: Optional[int] = Query(None)):
-    cache_key = make_cache_key("product", user_id, slug=slug)
-    cached = await get_cached(cache_key)
-    if cached:
-        return cached
-    product = await get_product_by_slug(slug, user_id)
-    await set_cached(cache_key, product, ttl=CACHE_TTL_SINGLE_PRODUCT)
+async def get_product(
+    slug: str,
+    user_id: Optional[int] = Query(None),
+    token: Optional[str] = Depends(get_optional_token)
+):
+    product = await get_product_by_slug(slug, user_id, token)
     return product
