@@ -34,26 +34,21 @@ class AuthService:
 
                 auth_data = auth_response.json()
                 token = auth_data["token"]
-
-                # Get user details
-                user_response = await client.get(
-                    self.user_endpoint,
-                    headers={"Authorization": f"Bearer {token}"}
-                )
-
-                if user_response.status_code != 200:
-                    logger.error(f"Failed to fetch user details for {username}")
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail="Failed to fetch user details"
-                    )
-
-                user_data = user_response.json()
-                print(user_data)
+                
                 return {
                     "access_token": token,
                     "token_type": "bearer",
-                    "user":user_data,
+                    "user": {
+                        "id": auth_data.get("user_id"),
+                        "username": auth_data.get("username"),
+                        "email": auth_data.get("user_email"),
+                        "display_name": auth_data.get("user_display_name"),
+                        "first_name": auth_data.get("first_name"),
+                        "last_name": auth_data.get("last_name"),
+                        "role": auth_data.get("user_role"),  
+                        "roles": auth_data.get("user_roles"),  
+                        "is_admin": auth_data.get("is_admin"), 
+                    }
                 }
 
         except httpx.TimeoutException:
