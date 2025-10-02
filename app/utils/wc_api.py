@@ -10,7 +10,7 @@ class WooCommerceAPI:
         self.auth = (settings.WC_CONSUMER_KEY, settings.WC_CONSUMER_SECRET)
         self.timeout = 30.0
     
-    async def _request(self, method: str, endpoint: str, **kwargs) -> Any:
+    async def _request(self, method: str, endpoint: str, return_headers: bool = False, **kwargs) -> Any:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         async with httpx.AsyncClient() as client:
             try:
@@ -22,6 +22,8 @@ class WooCommerceAPI:
                     **kwargs
                 )
                 response.raise_for_status()
+                if return_headers:
+                    return response.json(), response.headers
                 return response.json()
             except httpx.HTTPStatusError as e:
                 raise HTTPException(
@@ -46,7 +48,19 @@ class WooCommerceAPI:
 
     async def list_orders(self, customer_id: int, page: int, per_page: int) -> Dict:
         params = {"customer": customer_id, "page": page, "per_page": per_page}
-        return await self._request("GET", "orders", params=params)
+        data, headers = await self._request("GET", "orders", params=params, return_headers=True)
+
+        # Extract pagination info from headers
+        total = int(headers.get("X-WP-Total", 0))
+        total_pages = int(headers.get("X-WP-TotalPages", 0))
+
+        return {
+            "data": data,
+            "total": total,
+            "total_pages": total_pages,
+            "current_page": page,
+            "per_page": per_page
+        }
 
     async def create_order(self, order_data: Dict) -> Dict:
         return await self._request("POST", "orders", json=order_data)

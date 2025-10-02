@@ -27,17 +27,35 @@ class OrderCreate(BaseModel):
     line_items: List[LineItem]
 
 class OrderResponse(BaseModel):
+    id: int
     status: str
     total: str
     payment_method: str
     payment_method_title: str
-    stripe_payment_intent_client_secret: str  # Make sure this exists
+    stripe_payment_intent_client_secret: str
     payment_url: Optional[str] = None
 
+class OrderListItem(BaseModel):
+    id: int
+    name: str
+    quantity: int
+    total: str
+    product_id: Optional[int] = None
+    sku: Optional[str] = None
+
 class OrderListResponse(BaseModel):
-    line_items: List[LineItem]
+    id: int
+    status: str
+    line_items: List[OrderListItem]
     total: str
     date_created: str
 
-class Config:
-    extra = "ignore"  # Ignore fields WC sends that we don't define
+    class Config:
+        extra = "ignore"
+
+class PaginatedOrderResponse(BaseModel):
+    data: List[OrderListResponse]
+    total: int
+    total_pages: int
+    current_page: int
+    per_page: int

@@ -70,7 +70,7 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
             detail=f"Failed to create order: {str(e)}"
         )
 
-async def list_user_orders(current_user: TokenData, page, per_page) -> OrderListResponse:
+async def list_user_orders(current_user: TokenData, page, per_page):
     """List user orders"""
     try:
         user_orders = await wc_api.list_orders(customer_id=current_user["id"], page=page, per_page=per_page)

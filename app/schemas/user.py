@@ -37,6 +37,7 @@ ALLOWED_ROLES = [
     "contributor",
     "author",
     "editor",
+    "administrator",
 ]
 class UserRegister(BaseModel):
     username: str
@@ -45,13 +46,7 @@ class UserRegister(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     website: Optional[str] = None
-    role: str = "customer"
-
-    @validator("role")
-    def validate_role(cls, v):
-        if v.lower() not in ALLOWED_ROLES:
-            raise ValueError(f"Role '{v}' is not allowed. Allowed roles: {ALLOWED_ROLES}")
-        return v.lower()
+    role: Optional[str] = None
 
 class ForgotPasswordRequest(BaseModel):
     email: str
@@ -59,4 +54,15 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     login: str
     key: str
+    new_password: str
+
+class UserProfileUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    website: Optional[str] = None
+    role: Optional[str] = None
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
     new_password: str
