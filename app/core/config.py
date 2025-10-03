@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     STRIPE_SECRET_KEY: str
     
     # CORS Settings
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "https://www.leftkoast.com"]  # Default to your React app
+    CORS_ORIGINS: List[str]
     CORS_METHODS: List[str] = ["*"]
     CORS_HEADERS: List[str] = ["*"]
     CORS_CREDENTIALS: bool = True
