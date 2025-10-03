@@ -46,11 +46,9 @@ async def is_admin(user_id: int) -> bool:
                 f"{WC_API_BASE}/customers/{user_id}",
                 auth=auth,
             )
-        print("Admin status response:", response.status_code, response.text)
 
         if response.status_code == 200:
             data = response.json()
-            print("User roles field:", data.get("role"), data.get("roles"))
             
             roles = data.get("role") or data.get("roles") or []
             if isinstance(roles, list):

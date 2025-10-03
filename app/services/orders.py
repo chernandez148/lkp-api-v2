@@ -20,12 +20,9 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
         "customer_id": int(current_user["id"])
     }
 
-    print(f"Creating order with payload: {payload}")
-
     try:
         # Step 1: Create WooCommerce order (in pending status)
         created_order = await wc_api.create_order(payload)
-        print(f"Created WooCommerce order: {created_order['id']}")
         
         # Step 2: Extract order details
         order_id = created_order["id"]
@@ -45,8 +42,6 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
             amount=amount_in_cents,
             order_id=order_id  # Pass order ID for metadata
         )
-        
-        print(f"Created PaymentIntent: {payment_intent.id}")
 
         # Step 4: Return order info + client_secret (no payment_url needed)
         return OrderResponse(

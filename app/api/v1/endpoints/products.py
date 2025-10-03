@@ -96,7 +96,6 @@ async def list_product_authors(search: Optional[str] = Query(None)):
 @router.get("/favorites")
 async def list_favorite_products(token: str = Depends(oauth2_scheme)):
     products = await get_favorite_products_for_user(token)
-    print('products', products)
     return products
 
 @router.get("/{slug}")

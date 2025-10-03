@@ -6,7 +6,6 @@ from app.utils.wc_api import wc_api
 
 async def get_product_reviews(product_id: int, page: int = 1) -> List[Dict]:
     """Get all reviews for a product with pagination"""
-    print(product_id, page)
     reviews = await wc_api.get_reviews(product_id, page=page)  # Handle page in the API request
     return [
         {
