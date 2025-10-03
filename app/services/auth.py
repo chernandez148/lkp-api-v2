@@ -218,8 +218,6 @@ class AuthService:
                     auth=(settings.WP_ADMIN_USER, settings.WP_ADMIN_PASS)
                 )
 
-                print("reset response", response.json())
-
                 if response.status_code == 404:
                     logger.error(f"Reset password endpoint not found: {reset_password_endpoint}")
                     return {

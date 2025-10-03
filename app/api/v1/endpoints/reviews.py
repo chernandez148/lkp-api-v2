@@ -6,5 +6,4 @@ router = APIRouter()
 
 @router.get("/")
 async def get_reviews(product: int, page: int = 1):
-    print(f"Product ID (product): {product}, Page: {page}")
     return await get_product_reviews(product, page)

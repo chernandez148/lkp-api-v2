@@ -162,7 +162,7 @@ async def get_favorite_products_for_user(token: str):
     if not result["success"]:
         return []
 
-    product_ids = result["data"]  # e.g., [226, 305, 412]
+    product_ids = result["data"]
     if not product_ids:
         return []
 
