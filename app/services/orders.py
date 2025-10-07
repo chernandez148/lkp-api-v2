@@ -26,7 +26,19 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
         "payment_method_title": order_data.payment_method_title,
         "set_paid": False,
         "billing": order_data.billing.dict(),
-        "line_items": line_items_payload,
+        "line_items": [
+            {
+                **item.dict(exclude={"price", "meta_data", "authorStripeID"}),
+                "total": str(item.total),
+                "sku": str(item.sku) if getattr(item, "sku", None) else "",
+                "name": str(item.name),
+                "meta_data": (item.meta_data or []) + [{
+                    "key": "author_stripe_id",
+                    "value": item.authorStripeID
+                }] if item.authorStripeID else (item.meta_data or [])
+            }
+            for item in order_data.line_items
+        ],
         "customer_id": int(current_user["id"])
     }
 
