@@ -16,7 +16,15 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
         "payment_method_title": order_data.payment_method_title,
         "set_paid": False,  # Will be set to True after successful payment
         "billing": order_data.billing.dict(),
-        "line_items": [item.dict() for item in order_data.line_items],
+        "line_items": [
+            {
+                **item.dict(exclude={"price"}),
+                "total": str(item.total),
+                "sku": str(item.sku) if getattr(item, "sku", None) else "",
+                "name": str(item.name),
+            }
+            for item in order_data.line_items
+        ],
         "customer_id": int(current_user["id"])
     }
 
