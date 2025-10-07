@@ -2,8 +2,9 @@
 import stripe
 import os
 from typing import Dict, Optional
+from app.core.config import settings
 
-stripe.api_key = STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+stripe.api_key = STRIPE_SECRET_KEY = settings.STRIPE_SECRET_KEY
 
 async def create_stripe_payment_intent(
     billing: dict, 
