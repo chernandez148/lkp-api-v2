@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     # Stripe Settings
     STRIPE_SECRET_KEY: str
+    STRIPE_WEBHOOK_SECRET: str
     
     # CORS Settings
     CORS_ORIGINS: List[str]
