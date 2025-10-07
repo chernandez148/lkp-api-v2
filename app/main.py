@@ -7,6 +7,8 @@ from app.api.v1.routers import api_router
 from app.utils.cache import redis
 import logging
 
+from app.webhooks import stripe as stripe_webhook
+
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
@@ -43,6 +45,8 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+
+app.include_router(stripe_webhook.router)
 
 @app.get("/")
 async def root():

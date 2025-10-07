@@ -63,7 +63,16 @@ class WooCommerceAPI:
 
     async def create_order(self, order_data: Dict) -> Dict:
         return await self._request("POST", "orders", json=order_data)
-    
+
+    async def get_order(self, order_id: int) -> Dict:
+        """Fetch a single order by ID"""
+        orders = await self._request("GET", f"orders/{order_id}")
+        return orders
+        
+    async def update_order(self, order_id: int, status: str = "completed") -> Dict:
+        params = {"status": status}
+        return await self._request("POST", f"orders/{order_id}", params={"status": status})
+
     async def get_orders(self, customer_id: int, status: str = "completed") -> List[Dict]:
         params = {"customer": customer_id, "status": status}
         return await self._request("GET", "orders", params=params)

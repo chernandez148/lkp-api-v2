@@ -5,8 +5,8 @@ class LineItem(BaseModel):
     product_id: int
     quantity: int
     name: Optional[str] = None  # Optional: Name of the product
-    total: Optional[float] = None  # Optional: Price per unit of the product
-    sku: Optional[str] = None  # Optional: SKU (Stock Keeping Unit) for the product
+    total: Optional[str] = None  # Optional: Price per unit of the product
+    authorStripeID: Optional[str] = None
 
 class BillingInfo(BaseModel):
     first_name: str
