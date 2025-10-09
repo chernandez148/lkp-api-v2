@@ -5,30 +5,29 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
-import stripe  # <---- add this line
+import stripe
 
-load_dotenv()  # Loads environment variables from .env file
-
+load_dotenv()
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
-
 router = APIRouter()
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 class StripeLoginResponse(BaseModel):
     url: str
+    onboarding_completed: bool
+    message: str = None
 
 def decode_token(token: str):
     try:
         payload = jwt.decode(
             token,
-            settings.JWT_SECRET,  # your WP JWT secret
+            settings.JWT_SECRET,
             algorithms=["HS256"]
         )
         return payload.get("data", {}).get("user", {})
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
 @router.get("/login", response_model=StripeLoginResponse)
 async def get_login_link(token: str = Depends(oauth2_scheme)):
@@ -39,7 +38,36 @@ async def get_login_link(token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=400, detail="No connected Stripe account.")
 
     try:
+        # Get Stripe account information
+        account = stripe.Account.retrieve(stripe_account_id)
+        
+        # Check if onboarding is completed
+        charges_enabled = account.get("charges_enabled", False)
+        details_submitted = account.get("details_submitted", False)
+        
+        # If onboarding is not completed
+        if not charges_enabled or not details_submitted:
+            # Create account link to complete onboarding
+            account_link = stripe.AccountLink.create(
+                account=stripe_account_id,
+                refresh_url=f"{os.getenv('REDIRECT_URL')}/profile",  # URL when refresh
+                return_url=f"{os.getenv('REDIRECT_URL')}/profile",    # URL after onboarding
+                type="account_onboarding",
+            )
+            
+            return {
+                "url": account_link.url,
+                "onboarding_completed": False,
+                "message": "Please complete your Stripe onboarding process first."
+            }
+        
+        # If onboarding is completed, create login link
         login_link = stripe.Account.create_login_link(stripe_account_id)
-        return {"url": login_link["url"]}
+        return {
+            "url": login_link.url,
+            "onboarding_completed": True,
+            "message": "Login link created successfully."
+        }
+        
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
