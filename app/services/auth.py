@@ -46,7 +46,8 @@ class AuthService:
                         "first_name": auth_data.get("first_name"),
                         "last_name": auth_data.get("last_name"),
                         "role": auth_data.get("user_role"),  
-                        "roles": auth_data.get("user_roles"),  
+                        "roles": auth_data.get("user_roles"), 
+                        "stripe_account_id": auth_data.get("stripe_account_id"), 
                         "is_admin": auth_data.get("is_admin"), 
                     }
                 }
