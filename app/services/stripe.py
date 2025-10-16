@@ -80,18 +80,13 @@ async def handle_successful_payment(payment_intent_id: str, order_id: int):
 #  Create Payout to Connected Account(s)
 # ---------------------------
 async def create_stripe_connect_payout_intent(
-    author_stripe_ids: List[str],
-    total_amount: int,
+    author_stripe_ids: List[str],  # Now typically just one author
+    total_amount: int,  # The specific amount for THIS author
     order_id: Optional[int] = None,
     currency: str = "usd"
 ):
     """
-    Split the total_amount: 90% to authors evenly, 10% remains for platform.
-    
-    Args:
-        author_stripe_ids: List of connected account IDs (acct_...)
-        total_amount: Total order amount (in cents)
-        order_id: Optional WooCommerce order ID
+    Create payout to a single author (or multiple if they have multiple products)
     """
     if not author_stripe_ids:
         raise ValueError("No connected account IDs provided for payout")
@@ -99,31 +94,29 @@ async def create_stripe_connect_payout_intent(
     loop = asyncio.get_event_loop()
     transfers = []
 
-    # 90% goes to authors
-    total_author_share = int(total_amount * 0.9)
-    platform_fee = total_amount - total_author_share
-    author_share_each = total_author_share // len(author_stripe_ids)
+    # Calculate platform fee (10%)
+    platform_fee = int(total_amount * 0.1)
+    author_payout = total_amount - platform_fee
 
-    print(f"💰 Total amount: {total_amount} | Author total: {total_author_share} | Platform fee: {platform_fee}")
+    print(f"💰 Author total: {total_amount} cents | Payout: {author_payout} cents | Platform fee: {platform_fee} cents")
 
     for destination in author_stripe_ids:
         try:
             transfer = await loop.run_in_executor(
                 None,
                 lambda: stripe.Transfer.create(
-                    amount=author_share_each,
+                    amount=author_payout,  # Their specific payout amount
                     currency=currency,
                     destination=destination,
                     metadata={"wc_order_id": str(order_id) if order_id else "unknown"},
-                    description=f"Author payout (90%) for order {order_id or 'N/A'}"
+                    description=f"Author payout for order {order_id or 'N/A'}"
                 )
             )
             transfers.append(transfer)
-            print(f"💸 Created transfer to {destination} for {author_share_each} cents")
+            print(f"💸 Created transfer to {destination} for {author_payout} cents")
         except stripe.error.StripeError as e:
             print(f"❌ Stripe transfer error for {destination}: {str(e)}")
         except Exception as e:
             print(f"❌ Unexpected error creating transfer to {destination}: {str(e)}")
 
-    print(f"✅ Platform keeps {platform_fee} cents")
     return transfers
