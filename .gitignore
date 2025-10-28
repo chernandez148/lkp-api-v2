@@ -9,9 +9,6 @@ venv/
 env/
 ENV/
 
-# Google Credentials
-credentials/
-
 # Environment variables
 .env
 .env.*
