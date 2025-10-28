@@ -9,6 +9,9 @@ venv/
 env/
 ENV/
 
+# Google Credentials
+credentials/
+
 # Environment variables
 .env
 .env.*
@@ -42,3 +45,5 @@ dist/
 .DS_Store
 Thumbs.db
 *.swp
+credentials/
+*.json
