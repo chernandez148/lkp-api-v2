@@ -42,3 +42,8 @@ dist/
 .DS_Store
 Thumbs.db
 *.swp
+
+# Credentials directory - exclude all files and subdirectories
+credentials/
+credentials/*
+credentials/**/*

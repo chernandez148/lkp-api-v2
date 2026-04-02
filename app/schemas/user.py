@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, validator, Field
 from typing import Optional, List
 
 class UserBase(BaseModel):
@@ -47,6 +47,7 @@ class UserRegister(BaseModel):
     last_name: Optional[str] = None
     website: Optional[str] = None
     role: Optional[str] = None
+    recaptcha_token: str = Field(..., alias="recaptcha_token")
 
 class ForgotPasswordRequest(BaseModel):
     email: str

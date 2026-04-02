@@ -123,10 +123,22 @@ async def get_products_for_user(user_id: Optional[int], filters: Dict) -> List[D
     # Apply permission filtering
     return await sanitize_products_bulk(enriched_products, user_id)
 
-async def get_products_for_user_library(user_id: Optional[int], filters: Dict) -> List[Dict]:
-    products = await get_products_for_user(user_id, filters)
-    # Only keep products with ebook stream URL
-    return [p for p in products if any(meta.get("key") == "_ebook_stream_url" for meta in p.get("meta_data", []))]
+async def get_products_for_user_library(user_id: Optional[int], base_filters: Dict) -> List[Dict]:
+    page = 1
+    per_page = 50
+    all_products = []
+
+    while True:
+        filters = {**base_filters, "page": page, "per_page": per_page}
+        products = await get_products_for_user(user_id, filters)
+        matching = [p for p in products if any(meta.get("key") == "_ebook_stream_url" for meta in p.get("meta_data", []))]
+        all_products.extend(matching)
+
+        if len(products) < per_page:
+            break  # No more products
+        page += 1
+
+    return all_products
 
 # -----------------------------
 # Single product

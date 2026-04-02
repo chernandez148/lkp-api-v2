@@ -49,8 +49,6 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
             order_id=order_id
         )
 
-        await wc_api.update_order(order_id)
-
         return OrderResponse(
             id=created_order["id"],
             payment_url=None,

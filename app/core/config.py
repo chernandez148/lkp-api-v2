@@ -17,9 +17,18 @@ class Settings(BaseSettings):
     WP_ADMIN_PASS: str
     REDIRECT_URL: str
 
+    # Redis Settings
+    REDIS_HOST: str
+    REDIS_PORT: int
+
     # Stripe Settings
     STRIPE_SECRET_KEY: str
     STRIPE_WEBHOOK_SECRET: str
+
+    # ReCaptcha Settings
+    GOOGLE_APPLICATION_CREDENTIALS: str
+    RECAPTCHA_PROJECT_ID: str
+    RECAPTCHA_SITE_KEY: str
     
     # CORS Settings
     CORS_ORIGINS: List[str]

@@ -3,6 +3,7 @@ from typing import Optional
 import httpx
 from fastapi import HTTPException, status
 from app.core.config import settings
+from app.utils.recaptcha import create_assessment  # Add this import
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,10 +15,50 @@ class AuthService:
         self.lost_password_endpoint = f"{settings.WP_URL}/wp-json/custom/v1/forgot-password"
         self.timeout = 10.0
 
-    async def authenticate_user(self, username: str, password: str):
+    async def authenticate_user(self, username: str, password: str, recaptchaToken: str):
+        # VERIFY RECAPTCHA FIRST - before any authentication attempt
+        try:
+            assessment = create_assessment(
+                project_id=settings.RECAPTCHA_PROJECT_ID,
+                recaptcha_key=settings.RECAPTCHA_SITE_KEY,
+                token=recaptchaToken,
+                recaptcha_action="login_form"
+            )
+            
+            # Check if token is valid
+            if not assessment or not assessment.token_properties.valid:
+                logger.warning(f"Invalid reCAPTCHA token for user {username}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="reCAPTCHA verification failed"
+                )
+            
+            # Check risk score
+            score = assessment.risk_analysis.score
+            if score < 0.5:
+                logger.warning(
+                    f"Low reCAPTCHA score ({score}) for user {username}. "
+                    f"Reasons: {[str(r) for r in assessment.risk_analysis.reasons]}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Request appears suspicious. Please try again."
+                )
+            
+            logger.info(f"reCAPTCHA passed for {username} with score {score}")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"reCAPTCHA verification error: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Security verification failed"
+            )
+
+        # NOW proceed with WordPress authentication
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                # Authenticate with WordPress
                 auth_response = await client.post(
                     self.jwt_endpoint,
                     data={"username": username, "password": password}
@@ -73,8 +114,50 @@ class AuthService:
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,
         website: Optional[str] = None,
-        role: str = "customer"
+        role: str = "customer",
+        recaptchaToken: str = None
     ):
+
+        # VERIFY RECAPTCHA FIRST - before any authentication attempt
+        try:
+            assessment = create_assessment(
+                project_id=settings.RECAPTCHA_PROJECT_ID,
+                recaptcha_key=settings.RECAPTCHA_SITE_KEY,
+                token=recaptchaToken,
+                recaptcha_action="register_form"
+            )
+            
+            # Check if token is valid
+            if not assessment or not assessment.token_properties.valid:
+                logger.warning(f"Invalid reCAPTCHA token for user {username}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="reCAPTCHA verification failed"
+                )
+            
+            # Check risk score
+            score = assessment.risk_analysis.score
+            if score < 0.7:
+                logger.warning(
+                    f"Low reCAPTCHA score ({score}) for user {username}. "
+                    f"Reasons: {[str(r) for r in assessment.risk_analysis.reasons]}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Request appears suspicious. Please try again."
+                )
+            
+            logger.info(f"reCAPTCHA passed for {username} with score {score}")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"reCAPTCHA verification error: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Security verification failed"
+            )
+
         allowed_roles = [
             "vendor",
             "shop_manager",
