@@ -20,7 +20,9 @@ class Settings(BaseSettings):
     # Redis Settings
     REDIS_HOST: str
     REDIS_PORT: int
-
+    REDIS_USE_SSL: bool = False
+    ENVIRONMENT: str = "production" 
+   
     # Stripe Settings
     STRIPE_SECRET_KEY: str
     STRIPE_WEBHOOK_SECRET: str
