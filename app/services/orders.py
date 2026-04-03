@@ -52,15 +52,20 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
 
         # Handle 100% free orders to prevent Stripe crashes
         if amount_in_cents == 0:
+            
+            # ✅ ADD THIS LINE: Tell WooCommerce the free order is officially complete!
+            await wc_api.update_order(order_id, status="completed")
+
             return OrderResponse(
                 id=created_order["id"],
                 payment_url=None,
-                status="completed", # You might want to update WC status to 'completed' here
+                status="completed", 
                 total=created_order["total"],
                 payment_method=created_order["payment_method"],
                 payment_method_title=created_order["payment_method_title"],
                 stripe_payment_intent_client_secret=None
             )
+            
         elif amount_in_cents < 50:
             raise HTTPException(
                 status_code=400, 
