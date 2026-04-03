@@ -36,7 +36,7 @@ class OrderResponse(BaseModel):
     total: str
     payment_method: str
     payment_method_title: str
-    stripe_payment_intent_client_secret: str
+    stripe_payment_intent_client_secret: Optional[str] = None
     payment_url: Optional[str] = None
 
 class OrderListItem(BaseModel):
