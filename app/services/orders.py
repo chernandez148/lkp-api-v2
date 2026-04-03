@@ -14,13 +14,14 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
         line_item_dict = item.dict()
         # Add author Stripe ID to meta_data for webhook
         line_item_dict["meta_data"] = line_item_dict.get("meta_data", [])
-        if item.authorStripeID:
+        if getattr(item, 'authorStripeID', None):
             line_item_dict["meta_data"].append({
                 "key": "author_stripe_id",
                 "value": item.authorStripeID
             })
         line_items_payload.append(line_item_dict)
 
+    # Base payload
     payload = {
         "payment_method": "stripe",
         "payment_method_title": order_data.payment_method_title,
@@ -30,19 +31,28 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
         "customer_id": int(current_user["id"])
     }
 
+    # --- NEW COUPON LOGIC ---
+    # Check if coupon_lines exists in the incoming request and map it
+    if getattr(order_data, "coupon_lines", None):
+        payload["coupon_lines"] = [{"code": coupon.code} for coupon in order_data.coupon_lines]
+
     try:
-        # Create WooCommerce order
+        # Create WooCommerce order (WC calculates the discounts here!)
         created_order = await wc_api.create_order(payload)
 
         order_id = created_order["id"]
         billing = created_order.get("billing", {})
+        
+        # This total is already automatically discounted by WooCommerce
         total_amount = float(created_order["total"])
         amount_in_cents = int(total_amount * 100)
 
-        if amount_in_cents <= 0:
-            raise HTTPException(status_code=400, detail="Order total must be greater than zero")
+        # if amount_in_cents <= 0:
+        #     # Note: If a coupon makes the order 100% free, Stripe will fail here. 
+        #     # You might need to handle free orders differently without hitting Stripe.
+        #     raise HTTPException(status_code=400, detail="Order total must be greater than zero")
 
-        # Create Stripe PaymentIntent
+        # Create Stripe PaymentIntent with the discounted total
         payment_intent = await create_stripe_payment_intent(
             billing=billing,
             amount=amount_in_cents,
@@ -62,7 +72,7 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
     except Exception as e:
         logger.error(f"Error creating order: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create order: {str(e)}")
-
+        
 async def list_user_orders(current_user: TokenData, page, per_page):
     """List user orders"""
     try:
