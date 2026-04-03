@@ -10,14 +10,18 @@ logger = logging.getLogger(__name__)
 
 async def create_user_order(order_data: OrderCreate, current_user: TokenData) -> OrderResponse:
     line_items_payload = []
+    # If order_data.line_items contains Pydantic models, use .dict(). If they are dicts, use them directly.
     for item in order_data.line_items:
-        line_item_dict = item.dict()
+        line_item_dict = item.dict() if hasattr(item, 'dict') else item
+        
         # Add author Stripe ID to meta_data for webhook
         line_item_dict["meta_data"] = line_item_dict.get("meta_data", [])
-        if getattr(item, 'authorStripeID', None):
+        author_stripe_id = getattr(item, 'authorStripeID', None) or line_item_dict.get('authorStripeID')
+        
+        if author_stripe_id:
             line_item_dict["meta_data"].append({
                 "key": "author_stripe_id",
-                "value": item.authorStripeID
+                "value": author_stripe_id
             })
         line_items_payload.append(line_item_dict)
 
@@ -26,13 +30,12 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
         "payment_method": "stripe",
         "payment_method_title": order_data.payment_method_title,
         "set_paid": False,
-        "billing": order_data.billing.dict(),
+        "billing": order_data.billing.dict() if hasattr(order_data.billing, 'dict') else order_data.billing,
         "line_items": line_items_payload,
         "customer_id": int(current_user["id"])
     }
 
-    # --- NEW COUPON LOGIC ---
-    # Check if coupon_lines exists in the incoming request and map it
+    # Map the coupon lines into the payload
     if getattr(order_data, "coupon_lines", None):
         payload["coupon_lines"] = [{"code": coupon.code} for coupon in order_data.coupon_lines]
 
@@ -47,10 +50,22 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
         total_amount = float(created_order["total"])
         amount_in_cents = int(total_amount * 100)
 
-        # if amount_in_cents <= 0:
-        #     # Note: If a coupon makes the order 100% free, Stripe will fail here. 
-        #     # You might need to handle free orders differently without hitting Stripe.
-        #     raise HTTPException(status_code=400, detail="Order total must be greater than zero")
+        # Handle 100% free orders to prevent Stripe crashes
+        if amount_in_cents == 0:
+            return OrderResponse(
+                id=created_order["id"],
+                payment_url=None,
+                status=created_order["status"], # You might want to update WC status to 'completed' here
+                total=created_order["total"],
+                payment_method=created_order["payment_method"],
+                payment_method_title=created_order["payment_method_title"],
+                stripe_payment_intent_client_secret=None
+            )
+        elif amount_in_cents < 50:
+            raise HTTPException(
+                status_code=400, 
+                detail="Order total after discounts is less than the $0.50 minimum charge. Please add more items."
+            )
 
         # Create Stripe PaymentIntent with the discounted total
         payment_intent = await create_stripe_payment_intent(
@@ -71,8 +86,10 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
 
     except Exception as e:
         logger.error(f"Error creating order: {str(e)}")
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(status_code=500, detail=f"Failed to create order: {str(e)}")
-        
+                
 async def list_user_orders(current_user: TokenData, page, per_page):
     """List user orders"""
     try:
