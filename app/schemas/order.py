@@ -19,12 +19,16 @@ class BillingInfo(BaseModel):
     email: EmailStr
     phone: str
 
+class CouponLineCreate(BaseModel):
+    code: str
+
 class OrderCreate(BaseModel):
     payment_method: str
     payment_method_title: str
     set_paid: bool
     billing: BillingInfo
     line_items: List[LineItem]
+    coupon_lines: Optional[List[CouponLineCreate]] = []
 
 class OrderResponse(BaseModel):
     id: int
