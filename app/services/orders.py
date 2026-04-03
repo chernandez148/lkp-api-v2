@@ -55,7 +55,7 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
             return OrderResponse(
                 id=created_order["id"],
                 payment_url=None,
-                status=created_order["status"], # You might want to update WC status to 'completed' here
+                status="completed", # You might want to update WC status to 'completed' here
                 total=created_order["total"],
                 payment_method=created_order["payment_method"],
                 payment_method_title=created_order["payment_method_title"],
@@ -89,7 +89,7 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=f"Failed to create order: {str(e)}")
-                
+
 async def list_user_orders(current_user: TokenData, page, per_page):
     """List user orders"""
     try:
