@@ -104,5 +104,20 @@ async def get_product(
     user_id: Optional[int] = Query(None),
     token: Optional[str] = Depends(get_optional_token)
 ):
+    # 1. Create a dynamic cache key
+    # We include user_id because permissions (Read Now vs Add to Cart) change the JSON
+    cache_key = make_cache_key("product_detail", user_id, slug=slug)
+    
+    # 2. Try to get from Redis
+    cached = await get_cached(cache_key)
+    if cached:
+        return cached
+
+    # 3. If not in Redis, fetch from WooCommerce
     product = await get_product_by_slug(slug, user_id, token)
+    
+    # 4. Store in Redis for 5 minutes (300 seconds)
+    # Don't cache for too long since purchase status changes
+    await set_cached(cache_key, product, ttl=300)
+    
     return product

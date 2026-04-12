@@ -76,12 +76,14 @@ async def handle_successful_payment(payment_intent_id: str, order_id: int, user_
     try:
         print(f"✅ Payment successful for PaymentIntent: {payment_intent_id}, Order: {order_id}")
         
-        # 1. Clear the main library list cache (The carousel/list)
+        # Clear the library list
         await invalidate_cache(f"library_products:*:{user_id}")
-        
-        # 2. Clear individual purchase permission caches (The 'gatekeeper')
-        # This prevents the 'False' purchase flags from hiding ebook URLs
+
+        # Clear the individual purchase permissions (gatekeeper)
         await invalidate_cache(f"user_purchase:{user_id}:*")
+
+        # Clear the cached product detail page for this user
+        await invalidate_cache(f"product_detail:*:{user_id}")
         
         print(f"🧹 Cache invalidated successfully for user {user_id}")
         

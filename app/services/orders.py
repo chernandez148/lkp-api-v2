@@ -49,9 +49,14 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
             # Mark order as complete in WC
             await wc_api.update_order(order_id, status="completed")
             
-            # CLEAR BOTH CACHE LAYERS IMMEDIATELY
+            # Clear the library list
             await invalidate_cache(f"library_products:*:{user_id}")
+
+            # Clear the individual purchase permissions (gatekeeper)
             await invalidate_cache(f"user_purchase:{user_id}:*")
+
+            # Clear the cached product detail page for this user
+            await invalidate_cache(f"product_detail:*:{user_id}")
             
             logger.info(f"✅ Full cache clear for user {user_id} (Free Order)")
             return OrderResponse(
