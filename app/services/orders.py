@@ -55,10 +55,19 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
         # Handle 100% free orders to prevent Stripe crashes
         if amount_in_cents == 0:
             
+            user_id = current_user['id']
+            
+            # 1. Complete the order in WooCommerce
             await wc_api.update_order(order_id, status="completed")
-            await invalidate_cache(f"library_products:*:{current_user['id']}")
-            logger.info(f"Invalidated library cache for user {current_user['id']} (Free Order)")
-
+            
+            # 2. CLEAR LIBRARY LIST: Removes the cached list of products
+            await invalidate_cache(f"library_products:*:{user_id}")
+            
+            # 3. CLEAR PURCHASE PERMISSIONS: This is the missing piece!
+            # It clears the "False" flags cached by sanitize_products_bulk
+            await invalidate_cache(f"user_purchase:{user_id}:*")
+            
+            logger.info(f"Full cache clear for user {user_id} (Free Order)")
             return OrderResponse(
                 id=created_order["id"],
                 payment_url=None,
