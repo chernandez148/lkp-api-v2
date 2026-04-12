@@ -1,11 +1,13 @@
 # app/webhook/stripe.py
 from fastapi import APIRouter, Request, HTTPException
-from app.services.stripe import create_stripe_connect_payout_intent
+from app.services.stripe import create_stripe_connect_payout_intent, handle_successful_payment
 from app.utils.wc_api import wc_api
 import stripe
 import os
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 endpoint_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
@@ -16,65 +18,83 @@ async def stripe_webhook(request: Request):
     sig_header = request.headers.get("stripe-signature")
 
     try:
+        # Verify the webhook signature
         event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
-
+        
+        # Only process successful payments
         if event["type"] == "payment_intent.succeeded":
             payment_intent = event["data"]["object"]
+            
+            # Extract metadata we saved during PaymentIntent creation
             order_id = payment_intent["metadata"].get("wc_order_id")
+            user_id = payment_intent["metadata"].get("user_id")
 
-            if not order_id:
-                raise HTTPException(status_code=400, detail="Order ID missing in PaymentIntent metadata")
+            if not order_id or not user_id:
+                logger.warning(f"⚠️ Webhook received but missing metadata. Order: {order_id}, User: {user_id}")
+                return {"status": "metadata_missing"}
 
-            # ✅ UPDATE WOOCOMMERCE ORDER STATUS FIRST
+            logger.info(f"🚀 Processing successful payment for Order {order_id}, User {user_id}")
+
+            # 1. Update WooCommerce status to 'completed'
+            # This triggers the generation of digital download permissions in WC
             try:
-                await wc_api.update_order(order_id)
-                print(f"✅ Order {order_id} updated to 'completed'")
+                await wc_api.update_order(order_id, status="completed")
+                logger.info(f"✅ WooCommerce Order {order_id} marked as completed")
             except Exception as e:
-                print(f"❌ Failed to update order status: {str(e)}")
+                logger.error(f"❌ Failed to update WC order {order_id}: {str(e)}")
 
-            # Fetch the updated order from WooCommerce
-            order = await wc_api.get_order(order_id)
+            # 2. Clear Redis Cache (Library list + Product permissions)
+            # This ensures the user sees the new product immediately on refetch
+            try:
+                await handle_successful_payment(
+                    payment_intent_id=payment_intent['id'], 
+                    order_id=int(order_id), 
+                    user_id=int(user_id)
+                )
+            except Exception as e:
+                logger.error(f"❌ Cache invalidation failed for user {user_id}: {str(e)}")
 
-            # ✅ GROUP PRODUCT REVENUE BY AUTHOR
-            author_revenue = {}
-            
-            for item in order.get("line_items", []):
-                # Find author Stripe ID for this product
-                author_stripe_id = None
-                for meta in item.get("meta_data", []):
-                    if meta.get("key") == "author_stripe_id":
-                        author_stripe_id = meta.get("value")
-                        break
+            # 3. Handle Connect Payouts to Authors
+            try:
+                # Fetch the order details to see exactly what was paid for
+                order = await wc_api.get_order(order_id)
+                author_revenue = {}
                 
-                if author_stripe_id:
-                    # Calculate author's share for this product (90% of product total)
-                    product_total = float(item.get("total", 0))
-                    author_share = int(product_total * 0.9 * 100)  # Convert to cents
+                for item in order.get("line_items", []):
+                    # Find author Stripe ID for this product from meta_data
+                    author_stripe_id = None
+                    for meta in item.get("meta_data", []):
+                        if meta.get("key") == "author_stripe_id":
+                            author_stripe_id = meta.get("value")
+                            break
                     
-                    if author_stripe_id not in author_revenue:
-                        author_revenue[author_stripe_id] = 0
-                    author_revenue[author_stripe_id] += author_share
-            
-            # ✅ CREATE PAYOUTS FOR EACH AUTHOR WITH THEIR ACTUAL REVENUE
-            for author_stripe_id, amount_in_cents in author_revenue.items():
-                if amount_in_cents > 0:
-                    try:
-                        # Create individual transfer for each author
+                    if author_stripe_id:
+                        # Calculate author's 90% share (item total is after discounts)
+                        product_total = float(item.get("total", 0))
+                        author_share_cents = int(product_total * 0.9 * 100)
+                        
+                        author_revenue[author_stripe_id] = author_revenue.get(author_stripe_id, 0) + author_share_cents
+                
+                # Trigger the Stripe Transfers
+                for stripe_id, cents in author_revenue.items():
+                    if cents > 0:
                         await create_stripe_connect_payout_intent(
-                            author_stripe_ids=[author_stripe_id],  # Single author
-                            total_amount=amount_in_cents,  # Their specific revenue
-                            order_id=order_id
+                            author_stripe_ids=[stripe_id],
+                            total_amount=cents,
+                            order_id=int(order_id)
                         )
-                        print(f"💸 Paid {amount_in_cents/100:.2f} to author {author_stripe_id}")
-                    except Exception as e:
-                        print(f"❌ Failed to pay author {author_stripe_id}: {str(e)}")
+                        logger.info(f"💸 Paid ${cents/100:.2f} to author {stripe_id}")
 
-            print(f"✅ All payouts completed for order {order_id}")
+            except Exception as e:
+                logger.error(f"❌ Payout processing failed for order {order_id}: {str(e)}")
+
+            logger.info(f"🎯 Finished processing Webhook for Order {order_id}")
 
         return {"status": "success"}
 
     except stripe.error.SignatureVerificationError:
-        raise HTTPException(status_code=400, detail="Invalid Stripe signature")
+        logger.error("❌ Invalid Stripe signature")
+        raise HTTPException(status_code=400, detail="Invalid signature")
     except Exception as e:
-        print(f"❌ Webhook processing error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Webhook failed: {str(e)}")
+        logger.error(f"❌ Webhook failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
