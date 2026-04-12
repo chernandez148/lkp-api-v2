@@ -6,6 +6,8 @@ import asyncio
 from dotenv import load_dotenv
 from typing import Dict, Optional, List
 
+from app.utils.cache import invalidate_cache
+
 # Load Stripe secret key from environment
 load_dotenv()
 stripe.api_key = STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
@@ -72,6 +74,8 @@ async def handle_successful_payment(payment_intent_id: str, order_id: int):
     try:
         print(f"✅ Payment successful for PaymentIntent: {payment_intent_id}, Order: {order_id}")
         # Example: wc_api.update_order(order_id, {"status": "processing"})
+        await invalidate_cache(f"library_products:*:{user_id}")
+        print(f"🧹 Cache invalidated for user {user_id}")
     except Exception as e:
         print(f"❌ Error handling successful payment: {str(e)}")
         raise

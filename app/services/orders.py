@@ -3,6 +3,8 @@ from app.schemas.order import OrderCreate, OrderResponse, OrderListResponse
 from app.schemas.token import TokenData
 from app.services.stripe import create_stripe_payment_intent
 from app.utils.wc_api import wc_api
+from app.utils.cache import invalidate_cache
+
 from fastapi import HTTPException
 import logging
 
@@ -53,8 +55,9 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
         # Handle 100% free orders to prevent Stripe crashes
         if amount_in_cents == 0:
             
-            # ✅ ADD THIS LINE: Tell WooCommerce the free order is officially complete!
             await wc_api.update_order(order_id, status="completed")
+            await invalidate_cache(f"library_products:*:{current_user['id']}")
+            logger.info(f"Invalidated library cache for user {current_user['id']} (Free Order)")
 
             return OrderResponse(
                 id=created_order["id"],
