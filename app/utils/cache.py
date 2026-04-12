@@ -33,12 +33,12 @@ if REDIS_PASSWORD:
     pool_config["password"] = REDIS_PASSWORD
 
 if REDIS_USE_SSL:
-    pool_config["ssl"] = True
-    # Only use ssl_cert_reqs='none' in development
-    if os.getenv("ENVIRONMENT", "production") == "development":
-        pool_config["ssl_cert_reqs"] = "none"
-        logger.warning("⚠️  SSL certificate verification disabled - development only!")
-
+    # This tells the pool to use the SSL Connection class
+    from redis.asyncio import SSLConnection
+    pool_config["connection_class"] = SSLConnection
+    if os.getenv("ENVIRONMENT") == "development":
+        pool_config["ssl_cert_reqs"] = None
+    
 pool = ConnectionPool(**pool_config)
 redis = Redis(connection_pool=pool)
 

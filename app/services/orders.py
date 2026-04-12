@@ -10,39 +10,69 @@ logger = logging.getLogger(__name__)
 
 async def create_user_order(order_data: OrderCreate, current_user: TokenData) -> OrderResponse:
     line_items_payload = []
+    # If order_data.line_items contains Pydantic models, use .dict(). If they are dicts, use them directly.
     for item in order_data.line_items:
-        line_item_dict = item.dict()
+        line_item_dict = item.dict() if hasattr(item, 'dict') else item
+        
         # Add author Stripe ID to meta_data for webhook
         line_item_dict["meta_data"] = line_item_dict.get("meta_data", [])
-        if item.authorStripeID:
+        author_stripe_id = getattr(item, 'authorStripeID', None) or line_item_dict.get('authorStripeID')
+        
+        if author_stripe_id:
             line_item_dict["meta_data"].append({
                 "key": "author_stripe_id",
-                "value": item.authorStripeID
+                "value": author_stripe_id
             })
         line_items_payload.append(line_item_dict)
 
+    # Base payload
     payload = {
         "payment_method": "stripe",
         "payment_method_title": order_data.payment_method_title,
         "set_paid": False,
-        "billing": order_data.billing.dict(),
+        "billing": order_data.billing.dict() if hasattr(order_data.billing, 'dict') else order_data.billing,
         "line_items": line_items_payload,
         "customer_id": int(current_user["id"])
     }
 
+    # Map the coupon lines into the payload
+    if getattr(order_data, "coupon_lines", None):
+        payload["coupon_lines"] = [{"code": coupon.code} for coupon in order_data.coupon_lines]
+
     try:
-        # Create WooCommerce order
+        # Create WooCommerce order (WC calculates the discounts here!)
         created_order = await wc_api.create_order(payload)
 
         order_id = created_order["id"]
         billing = created_order.get("billing", {})
+        
+        # This total is already automatically discounted by WooCommerce
         total_amount = float(created_order["total"])
         amount_in_cents = int(total_amount * 100)
 
-        if amount_in_cents <= 0:
-            raise HTTPException(status_code=400, detail="Order total must be greater than zero")
+        # Handle 100% free orders to prevent Stripe crashes
+        if amount_in_cents == 0:
+            
+            # ✅ ADD THIS LINE: Tell WooCommerce the free order is officially complete!
+            await wc_api.update_order(order_id, status="completed")
 
-        # Create Stripe PaymentIntent
+            return OrderResponse(
+                id=created_order["id"],
+                payment_url=None,
+                status="completed", 
+                total=created_order["total"],
+                payment_method=created_order["payment_method"],
+                payment_method_title=created_order["payment_method_title"],
+                stripe_payment_intent_client_secret=None
+            )
+            
+        elif amount_in_cents < 50:
+            raise HTTPException(
+                status_code=400, 
+                detail="Order total after discounts is less than the $0.50 minimum charge. Please add more items."
+            )
+
+        # Create Stripe PaymentIntent with the discounted total
         payment_intent = await create_stripe_payment_intent(
             billing=billing,
             amount=amount_in_cents,
@@ -61,6 +91,8 @@ async def create_user_order(order_data: OrderCreate, current_user: TokenData) ->
 
     except Exception as e:
         logger.error(f"Error creating order: {str(e)}")
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(status_code=500, detail=f"Failed to create order: {str(e)}")
 
 async def list_user_orders(current_user: TokenData, page, per_page):

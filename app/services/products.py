@@ -52,11 +52,7 @@ async def enrich_product_categories(product: Dict) -> Dict:
             return cached
         category = await wc_api.get_category(cat["id"])
         if category:
-            enriched = {
-                "id": category["id"],
-                "name": category["name"],
-                "image": category.get("image", {}).get("src") if category.get("image") else None
-            }
+            enriched = {"id": category["id"], "name": category["name"], "image": category.get("image").get("src") if category.get("image") else None}
             await set_cached(cache_key, enriched, ttl=CATEGORY_CACHE_TTL)
             return enriched
         return None

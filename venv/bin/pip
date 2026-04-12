@@ -1,4 +1,4 @@
-#!/home/chernandez148/nothing_is_made/websites/left_koast_productions/serverv2/venv/bin/python
+#!/home/ubuntu/serverv2/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys
