@@ -43,45 +43,30 @@ pool = ConnectionPool(**pool_config)
 redis = Redis(connection_pool=pool)
 
 
-async def invalidate_cache(pattern: str) -> int:
+async def invalidate_cache(pattern: str):
     """
-    Delete all keys in Redis that match the given pattern.
-    
-    Args:
-        pattern: Redis pattern (e.g., "products:*" for all product keys)
-        
-    Returns:
-        Number of keys deleted
-        
-    Warning:
-        KEYS command can be slow on large databases. Consider using SCAN
-        for production environments with many keys.
+    Cluster-safe cache invalidation.
+    Finds keys matching a pattern and deletes them one by one 
+    to avoid 'same slot' errors.
     """
     try:
-        # Using SCAN is more production-friendly than KEYS
-        deleted_count = 0
-        cursor = 0
-        
-        while True:
-            cursor, keys = await redis.scan(cursor, match=pattern, count=100)
-            if keys:
-                await redis.delete(*keys)
-                deleted_count += len(keys)
+        # Use the 'redis' instance you've already defined
+        # We use 'async for' to iterate through keys across the cluster
+        keys_to_delete = []
+        async for key in redis.scan_iter(match=pattern):
+            keys_to_delete.append(key)
+
+        if keys_to_delete:
+            # Delete keys one by one or in a loop to ensure cluster compatibility
+            for key in keys_to_delete:
+                await redis.delete(key)
             
-            if cursor == 0:
-                break
-        
-        if deleted_count > 0:
-            logger.info(f"Invalidated {deleted_count} cache keys for pattern '{pattern}'")
-        
-        return deleted_count
-        
-    except RedisConnectionError as e:
-        logger.error(f"Redis connection error while invalidating pattern '{pattern}': {e}")
-        return 0
+            logging.info(f"🧹 Successfully invalidated {len(keys_to_delete)} keys for pattern: {pattern}")
+        else:
+            logging.info(f"ℹ️ No keys found for pattern: {pattern}")
+
     except Exception as e:
-        logger.error(f"Failed to invalidate cache for pattern '{pattern}': {e}")
-        return 0
+        logging.error(f"❌ Failed to invalidate cache for pattern '{pattern}': {e}")
 
 
 async def invalidate_cache_keys(keys: List[str]) -> int:
