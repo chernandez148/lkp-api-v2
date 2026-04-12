@@ -53,15 +53,16 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint that includes Redis status"""
+    redis_status = "disconnected"
     try:
-        await redis.ping()
-        redis_status = "connected"
-    except Exception:
-        redis_status = "disconnected"
-    
+        # Actually ping the AWS Redis
+        if await redis.ping():
+            redis_status = "connected"
+    except Exception as e:
+        logger.error(f"Health check Redis failure: {e}")
+
     return {
         "status": "healthy",
         "redis": redis_status,
-        "message": "Left Koast Productions API is running"
+        "version": "2.0.0"
     }
